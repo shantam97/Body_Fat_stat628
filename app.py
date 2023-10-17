@@ -9,8 +9,12 @@ from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import r2_score, mean_squared_error
+import joblib  # Added for saving sklearn models and transformers
 
-sns.set()
+# Load the model and transformer
+model = joblib.load('model.pkl')
+trans = joblib.load('transformer.pkl')
+
 
 data=pd.read_csv('BodyFat.csv')
 data.columns = map(str.lower, data.columns)
@@ -40,37 +44,6 @@ final_data = data[~((data < (Q1 - 2 * IQR)) | (data > (Q3 + 2 * IQR))).any(axis=
 
 predictors = ['abdomen', 'adiposity', 'hip']
 
-# Defining the dependent and independent variables 
-y = final_data['bodyfat']
-# x = final_data.drop(['bodyfat','age','ankle', 'bmi'],axis=1)
-x = final_data[predictors]
-
-# Yeo-Johnson Power Transformation inflates low variance data and deflates high variance data to create a more uniform dataset.
-# This transformation helps in normalizing weightage of representation.
-# This avoids any additional work needed for choosing test data. It can be chosen at random.
-trans = PowerTransformer()
-x = trans.fit_transform(x)
-X_train,X_test,y_train,y_test = train_test_split(x,y,train_size=0.8,random_state=42)
-
-# Modeling using Ridge Linear Regressor
-ridge_params = {'alpha': [0.001,0.01, 0.1, 1.0, 5.0,10.0, 11.0, 12.0,13.0, 14.0, 15.0],
-                'solver': ['auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga'],  # Algorithm to use in the computation
-                'max_iter': [100, 300, 500] 
-               ,'random_state':[42]}
-ridge_grid = GridSearchCV(Ridge(), ridge_params, cv=10, scoring='r2', n_jobs=-1)
-ridge_grid.fit(X_train, y_train)
-best_ridge_params = ridge_grid.best_params_
-
-model = LinearRegression()
-model.fit(X_train,y_train)
-y_pred = model.predict(X_test)
-R2_score=r2_score(y_test,y_pred) * 100
-RMSE=np.sqrt(mean_squared_error(y_test,y_pred))
-
-print(f"Modeling Score using Ridge Linear Regressor is: \n{R2_score = }%, and \n{RMSE = }")
-
-
-
 # Ensure your previous code is intact here for model training...
 
 # Importing necessary libraries for Dash app
@@ -86,6 +59,8 @@ import traceback
 # Dummy averages for visualization - replace with actual values
 average_values = {'abdomen': 0.90, 'adiposity': 25, 'hip': 1.0, 'bodyfat': 18}
 
+
+
 # Initialize Dash app
 # Initialize Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP,]) 
@@ -93,7 +68,19 @@ app.scripts.config.serve_locally = True
 app.css.config.serve_locally = True 
 server = app.server
 
+y = final_data['bodyfat']
+# x = final_data.drop(['bodyfat','age','ankle', 'bmi'],axis=1)
+x = final_data[predictors]
 
+# Yeo-Johnson Power Transformation inflates low variance data and deflates high variance data to create a more uniform dataset.
+# This transformation helps in normalizing weightage of representation.
+# This avoids any additional work needed for choosing test data. It can be chosen at random.
+trans = PowerTransformer()
+x = trans.fit_transform(x)
+X_train,X_test,y_train,y_test = train_test_split(x,y,train_size=0.8,random_state=42)
+model = LinearRegression()
+model.fit(X_train,y_train)
+y_pred = model.predict(X_test)
 # Inline styles
 styles = {
     'container': {
@@ -323,7 +310,7 @@ def update_output(selected_feature, n_clicks, abdomen, adiposity, hip):
 
     except Exception as e:
         print(e)  # This helps you understand the traceback
-    return (f"An error occurred: {str(e)}", {}, {}, {})
+    
 
 
 if __name__ == '__main__':
