@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import PowerTransformer
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import r2_score, mean_squared_error
@@ -60,7 +61,7 @@ ridge_grid = GridSearchCV(Ridge(), ridge_params, cv=10, scoring='r2', n_jobs=-1)
 ridge_grid.fit(X_train, y_train)
 best_ridge_params = ridge_grid.best_params_
 
-model = Ridge(**best_ridge_params)
+model = LinearRegression()
 model.fit(X_train,y_train)
 y_pred = model.predict(X_test)
 R2_score=r2_score(y_test,y_pred) * 100
@@ -87,14 +88,53 @@ average_values = {'abdomen': 0.90, 'adiposity': 25, 'hip': 1.0, 'bodyfat': 18}
 
 # Initialize Dash app
 # Initialize Dash app
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])  # Using Bootstrap for better styling
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP,]) 
+app.scripts.config.serve_locally = True
+app.css.config.serve_locally = True 
+
+
+# Inline styles
+styles = {
+    'container': {
+        'backgroundColor': '#f8f9fa'
+        
+    },
+    
+    'header': {
+        'color': '#0d6efd',
+        'textAlign': 'center',
+        'margin': '50px'
+    },
+    'sub_header': {
+        'color': '#0d6efd'
+    },
+    'dropdown': {
+        'width': '100%',  # This makes the dropdown match the width of its container
+        'marginBottom': '20px'  # Optional: for space between the dropdown and the scatter plot
+    },
+    'scatter': {
+        'width': '100%',  # This makes the scatter plot match the width of its container
+        'marginTop': '20px'  # Optional: for space between the dropdown and the scatter plot
+    },
+    'button': {
+        'width': '100%',
+        'color': '#fff',
+        'backgroundColor': '#0d6efd',
+        'borderColor': '#0d6efd'
+    },
+    'graph': {
+        'boxShadow': '0 1px 2px 0 rgba(0, 0, 0, 0.1)',
+        'marginTop': '20px'
+    }
+}
+
 
 app.layout = dbc.Container([
     dbc.Row(html.H1("Body Fat Prediction", className="text-center my-4")),  # Centered heading with margin
     dbc.Row([
         dbc.Col([
             html.H2("Input Features"),
-            html.Div("Enter the following details (in cm for Abdomen and Hip, and as a raw number for Adiposity):"),
+            html.Div("Enter the following details :"),
             
             # Reformatted the layout without dbc.FormGroup
             dbc.Row([
@@ -112,8 +152,8 @@ app.layout = dbc.Container([
                 dbc.Col(dbc.Input(id='input-hip', type='number', value=95, min=80), width=6),
             ], className="mb-3"),
             
-            dbc.Button('Predict', id='predict-button', color="primary", className="mt-3", n_clicks=0),
-            html.H2(id='output-prediction', className="my-4"),
+            dbc.Button('Predict', id='predict-button', color="primary", className="mt-3", n_clicks=0,style=styles['button']),
+            html.H2(id='output-prediction', className="my-4",style=styles['sub_header']),
         ], width=4),
         
         dbc.Col([
@@ -124,10 +164,11 @@ app.layout = dbc.Container([
                     {'label': 'Adiposity', 'value': 'adiposity'},
                     {'label': 'Hip', 'value': 'hip'}
                 ],
-                value='abdomen'  # Default value
+                value='abdomen',
+             style=styles['dropdown'] # Default value
             ),
-            dcc.Graph(id='scatter-plot'),
-        ], width=8),
+            dcc.Graph(id='scatter-plot',style=styles['scatter']),
+        ], width=6),
     ]),
     
     dbc.Row([
@@ -139,13 +180,13 @@ app.layout = dbc.Container([
         dbc.Col(dcc.Graph(id='residual-plot'), width=6),
     ]),
     dbc.Row([
-        dbc.Col(dcc.Graph(id='target-histogram'), width=6),
-        dbc.Col(dcc.Graph(id='feature-boxplot'), width=6),
+        dbc.Col(dcc.Graph(id='feature-boxplot'),style=styles['graph'], width=6),
+        dbc.Col(dcc.Graph(id='actual-predicted-plot'), width=6),
     ]),
-    dbc.Row(dbc.Col(dcc.Graph(id='actual-predicted-plot'), width=12)),
+    
 
 
-], fluid=True)
+], style=styles['container'],fluid=True)
 
 @app.callback(
     [
@@ -155,9 +196,9 @@ app.layout = dbc.Container([
         Output("feature-importance-plot", "figure"),
         Output("correlation-heatmap", "figure"),
         Output("residual-plot", "figure"),
-        Output("target-histogram", "figure"),
         Output("feature-boxplot", "figure"),
         Output("actual-predicted-plot", "figure"),
+         
     ],
     [
         Input("scatter-dropdown", "value"),  # corrected from "selected-feature"
@@ -172,9 +213,12 @@ app.layout = dbc.Container([
 
 
 
+
+
 def update_output(selected_feature, n_clicks, abdomen, adiposity, hip):
+    
     if n_clicks is None:
-         return 'Enter values and click Predict to get the body fat prediction.', {}, {}, {}
+        return 'Enter values and click Predict to get the body fat prediction.', {}, {}, {}
     try:
         abdomen_m = abdomen / 100
         hip_m = hip / 100
@@ -182,7 +226,10 @@ def update_output(selected_feature, n_clicks, abdomen, adiposity, hip):
         input_data = np.array([abdomen_m, adiposity, hip_m]).reshape(1, -1)
         input_data_transformed = trans.transform(input_data)
         prediction = model.predict(input_data_transformed)[0]
+        
         prediction_text = f'Predicted Body Fat: {prediction:.2f}%'
+
+    
 
         # Create various plots
         # Move the scatter plot update logic to its own function
@@ -200,7 +247,7 @@ def update_output(selected_feature, n_clicks, abdomen, adiposity, hip):
 
         # Generate the scatter plot
         scatter_fig = px.scatter(final_data, x=selected_feature, y='bodyfat', title=f'{selected_feature.capitalize()} vs Body Fat')
-        scatter_fig.add_scatter(x=x_range, y=trendline_y, mode='lines', name='Trendline', line=dict(color='Black'))
+        #scatter_fig.add_scatter(x=x_range, y=trendline_y, mode='lines', name='Trendline', line=dict(color='Black'))
 
         # Adding user input to the scatter plot
         user_input = abdomen_m if selected_feature == 'abdomen' else (adiposity if selected_feature == 'adiposity' else hip_m)
@@ -250,34 +297,31 @@ def update_output(selected_feature, n_clicks, abdomen, adiposity, hip):
             title='Feature Correlation Matrix'
         )
 
-
+        
         # Residual Plot
         residuals = y_test - y_pred
         residual_plot = px.scatter(x=y_pred, y=residuals)
         residual_plot.add_hline(y=0, line_dash="dash", line_color="red")
         residual_plot.update_layout(title='Residuals vs. Predicted', xaxis_title='Predicted', yaxis_title='Residuals')
 
-        # Histogram of Target Variable
-        histogram = px.histogram(final_data, x="bodyfat")
-        histogram.update_layout(title='Distribution of Body Fat', xaxis_title='Body Fat', yaxis_title='Count')
-
-            # Box Plots for Features
+        
+        # Box Plots for Features
         box = go.Figure()
         
         for feature in predictors:
                 box.add_trace(go.Box(y=final_data[feature], name=feature, boxpoints='all', jitter=0.5, whiskerwidth=0.2))
         box.update_layout(title='Distribution of Features')
 
-# Actual vs Predicted Value Plot
+        # Actual vs Predicted Value Plot
         actual_vs_predicted = go.Figure()
         actual_vs_predicted.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', name='data'))
         actual_vs_predicted.add_trace(go.Scatter(x=y_test, y=y_test, mode='lines', name='ideal fit'))
         actual_vs_predicted.update_layout(title='Actual vs Predicted', xaxis_title='Actual', yaxis_title='Predicted')
 
-        return (prediction_text, scatter_fig, comparison_fig, fig_feature_importance, fig_corr, residual_plot, histogram, box, actual_vs_predicted)
+        return (prediction_text, scatter_fig, comparison_fig, fig_feature_importance, fig_corr, residual_plot, box, actual_vs_predicted)
 
     except Exception as e:
-        print(traceback.format_exc())  # This helps you understand the traceback
+        print(e)  # This helps you understand the traceback
     return (f"An error occurred: {str(e)}", {}, {}, {})
 
 
